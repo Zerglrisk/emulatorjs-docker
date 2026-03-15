@@ -1,24 +1,31 @@
-FROM node:18-alpine AS builder
+FROM emscripten/emsdk:latest AS core-builder
+
+WORKDIR /build
+
+RUN git clone --depth 1 https://github.com/libretro/libretro-super.git && \
+    cd libretro-super && \
+    ./libretro-fetch.sh && \
+    ./libretro-build-emscripten.sh
+
+FROM alpine:latest AS emulator-builder
 
 ARG EMULATORJS_VERSION=main
 
 WORKDIR /build
 
-RUN apk add --no-cache git p7zip sed && \
-    echo "Building EmulatorJS version: ${EMULATORJS_VERSION}" && \
+RUN apk add --no-cache git && \
+    echo "Downloading EmulatorJS version: ${EMULATORJS_VERSION}" && \
     git clone --depth 1 --branch ${EMULATORJS_VERSION} https://github.com/EmulatorJS/EmulatorJS.git . && \
-    sed -i 's/process\.stdout\.clearLine();//g' build.js && \
-    sed -i 's/process\.stdout\.cursorTo(0);//g' build.js && \
-    npm install && \
-    npm install @emulatorjs/cores && \
-    npm run build || (echo "Build failed, trying alternative..." && mkdir -p dist && cp -r data dist/)
+    rm -rf .git .github
 
 FROM nginx:alpine
 
 LABEL maintainer="zerglrisk"
-LABEL description="EmulatorJS - 웹 브라우저 기반 레트로 게임 에뮬레이터 (Self-built)"
+LABEL description="EmulatorJS"
 
-COPY --from=builder /build/dist /usr/share/nginx/html
+COPY --from=emulator-builder /build /usr/share/nginx/html
+
+COPY --from=core-builder /build/libretro-super/dist/emscripten /usr/share/nginx/html/data/cores
 
 RUN mkdir -p /usr/share/nginx/html/roms
 
