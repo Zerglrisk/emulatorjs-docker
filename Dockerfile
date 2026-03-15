@@ -4,7 +4,7 @@ ARG EMULATORJS_VERSION=main
 
 WORKDIR /build
 
-RUN apk add --no-cache git && \
+RUN apk add --no-cache git p7zip && \
     echo "Building EmulatorJS version: ${EMULATORJS_VERSION}" && \
     git clone --depth 1 --branch ${EMULATORJS_VERSION} https://github.com/EmulatorJS/EmulatorJS.git . && \
     npm install && \
