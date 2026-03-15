@@ -1,31 +1,87 @@
-name: Docker Build
+name: Auto Build on EmulatorJS Release
 
 on:
   push:
     branches: [ main ]
+  schedule:
+    # - cron: '0 0 * * *'  # UTC 00:00 = KST 09:00 (오전 9시)
+    # - cron: '0 15 * * *'  # UTC 15:00 = KST 00:00 (자정)
+    # - cron: '0 12 * * *'  # UTC 12:00 = KST 21:00 (오후 9시)
+    # - cron: '0 */6 * * *'   # 6시간마다 (하루 4번)
+    # - cron: '0 */12 * * *'  # 12시간마다 (하루 2번)
+    # - cron: '0 0 * * *'     # 매일 자정
+    - cron: '0 0 * * 0'     # 매주 일요일
   workflow_dispatch:
 
 env:
   IMAGE_NAME: zerglrisk/emulatorjs
+  EMULATORJS_REPO: EmulatorJS/EmulatorJS
 
 jobs:
-  build:
+  check-and-build:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v4
     
+    # Step 1: EmulatorJS 최신 릴리즈 태그 가져오기
+    - name: Get EmulatorJS latest release tag
+      id: emulatorjs
+      run: |
+        LATEST_TAG=$(curl -s https://api.github.com/repos/${{ env.EMULATORJS_REPO }}/releases/latest | jq -r .tag_name)
+        
+        # 릴리즈가 없으면 main 사용
+        if [ "$LATEST_TAG" = "null" ]; then
+          LATEST_TAG="main"
+        fi
+        
+        echo "tag=$LATEST_TAG" >> $GITHUB_OUTPUT
+        echo "📦 Latest EmulatorJS release: $LATEST_TAG"
+    
+    # Step 2: Docker Hub에 해당 태그 이미지가 이미 있는지 확인
+    - name: Check if image tag exists on Docker Hub
+      id: check
+      run: |
+        TAG="${{ steps.emulatorjs.outputs.tag }}"
+        
+        # Docker Hub API 호출
+        RESPONSE=$(curl -s https://hub.docker.com/v2/repositories/${{ env.IMAGE_NAME }}/tags/$TAG)
+        
+        # 404 에러 또는 "not found" 메시지 확인
+        if echo "$RESPONSE" | grep -q "not found\|Object not found"; then
+          echo "need_build=true" >> $GITHUB_OUTPUT
+          echo "✅ New version detected: $TAG - Building..."
+        else
+          echo "need_build=false" >> $GITHUB_OUTPUT
+          echo "⏭️  Version $TAG already exists - Skipping build"
+        fi
+    
+    # Step 3: 새 버전이면 Docker Hub 로그인
     - name: Login to Docker Hub
+      if: steps.check.outputs.need_build == 'true'
       uses: docker/login-action@v3
       with:
         username: zerglrisk
         password: ${{ secrets.DOCKERHUB_TOKEN }}
     
-    - name: Build and Push
+    # Step 4: Docker 이미지 빌드 및 푸시
+    - name: Build and Push Docker image
+      if: steps.check.outputs.need_build == 'true'
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
+        build-args: |
+          EMULATORJS_VERSION=${{ steps.emulatorjs.outputs.tag }}
         tags: |
           ${{ env.IMAGE_NAME }}:latest
-          ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          ${{ env.IMAGE_NAME }}:${{ steps.emulatorjs.outputs.tag }}
+    
+    # Step 5: 빌드 완료 알림
+    - name: Build summary
+      if: steps.check.outputs.need_build == 'true'
+      run: |
+        echo "🎉 Successfully built and pushed:"
+        echo "- ${{ env.IMAGE_NAME }}:latest"
+        echo "- ${{ env.IMAGE_NAME }}:${{ steps.emulatorjs.outputs.tag }}"

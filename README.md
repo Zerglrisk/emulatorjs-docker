@@ -2,6 +2,8 @@
 
 웹 브라우저에서 레트로 게임을 플레이할 수 있는 EmulatorJS 컨테이너
 
+[![Docker Build](https://github.com/zerglrisk/emulatorjs-docker/actions/workflows/build.yml/badge.svg)](https://github.com/zerglrisk/emulatorjs-docker/actions/workflows/build.yml)
+
 ## 사용법
 ```bash
 docker run -d \
@@ -35,6 +37,10 @@ roms/
 ## 지원 시스템
 
 NES, SNES, GB, GBC, GBA, N64, PSX, Sega Genesis 등
+
+## 자동 업데이트
+
+EmulatorJS 새 릴리즈가 나오면 매일 자동으로 감지하여 빌드합니다.
 
 ## TrueNAS 연동
 
