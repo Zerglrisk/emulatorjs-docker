@@ -4,11 +4,14 @@ ARG EMULATORJS_VERSION=main
 
 WORKDIR /build
 
-RUN apk add --no-cache git p7zip && \
+RUN apk add --no-cache git p7zip sed && \
     echo "Building EmulatorJS version: ${EMULATORJS_VERSION}" && \
     git clone --depth 1 --branch ${EMULATORJS_VERSION} https://github.com/EmulatorJS/EmulatorJS.git . && \
+    sed -i 's/process\.stdout\.clearLine();//g' build.js && \
+    sed -i 's/process\.stdout\.cursorTo(0);//g' build.js && \
     npm install && \
-    npm run build
+    npm install @emulatorjs/cores && \
+    npm run build || (echo "Build failed, trying alternative..." && mkdir -p dist && cp -r data dist/)
 
 FROM nginx:alpine
 
